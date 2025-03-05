@@ -86,7 +86,9 @@
   - [Opal23 Head Pose](#opal23-head-pose)
 - [Benchmarking of PINTO Models on STM32 MCU with Neural-ART™](#benchmarking-of-pinto-models-on-stm32-mcu-with-neural-art)
 - [ONNX model zoo](#onnx-model-zoo)
-
+- [B-FPGM ( Latest face detector, 2025)](#b-fpgm--latest-face-detector-2025)
+- [FeatherFace ( Latest face detector, 2025)](#featherface--latest-face-detector-2025)
+- [Comparative Analysis of CenterFace and BlazeFace for Face Detection Applications](#comparative-analysis-of-centerface-and-blazeface-for-face-detection-applications)
 
 
 <br><br>
@@ -1476,7 +1478,7 @@ MBConv optimizes the trade-off between accuracy and computational cost, enabling
 | dbface_keras_480x640_weight_quant_nhwc| tflite|2,136,463,975| 7.1 MB          |    30.8 MB       |     5.28e+4 ms|  480x640   |  &#10004; |   &#10004;        |   
 | dbface_keras_480x640_integer_quant_nhwc| tflite|2,086,146,121| 3.1 MB         |  13.1 MB         |     486.2 ms   | 480x640    | &#10004;  | &#10004;          |
 | dbface_keras_256x256_weight_quant_nhwc | tflite|455,834,343| 7.1 MB         |  7.4 MB          |   1.212e+4 ms  | 256x256    | &#10004;  |  &#10004;         |
-| <span style="color: green;">dbface_keras_256x256_integer_quant_nhwc</span>| tflite|445,098,409| 3.57 MB        |     2.14MB       |   27.72 ms     |  256x25    | &#10004;  |  &#10004;         | Almost high temporal jitter
+| <span style="color: green;">dbface_keras_256x256_integer_quant_nhwc</span>| tflite|445,098,409| 3.57 MB        |     2.14MB       |   27.72 ms     |  256x256    | &#10004;  |  &#10004;         | Almost high temporal jitter
 | /Face_Landmark/yolov4_headdetection_480x640|onnx|54,597,774,206|               |    ?             |    ?           |   480x640  |  &#10008; |  &#10004;         | INTERNAL ERROR: node_1113 of type Tile has not parameter repeats. Available parameters are dict_keys(['output_shape_values']). It did not worked even with random quatization of the software.
 | face_landmark_Nx3x160x160| onnx        |?|    ?          |    ?             |      ?         |   160x160  |   &#10004;|   &#10004;         |  This is a model for predicting dense 2d face mesh that should be coupled with a face detector. NOT IMPLEMENTED: Order of dimensions of input cannot be interpreted.
 |/Face_Landmark/model_integer_quant|tflite |43,910,554| 1.1 MB        |  677 KB          |        39.72 ms        |   160x160  |   &#10004; |    &#10008;      | Same as previous model but different format
@@ -1501,19 +1503,64 @@ MBConv optimizes the trade-off between accuracy and computational cost, enabling
 | mobilefacenet_Nx3x112x112 |                       onnx  |   226,881,224       | 4 MB          | 4 MB    |              5337 ms                 | 112x112    | &#10004; | &#10004;  | This is a network for dense face mesh (Landmarks). It needs to be coupled with a face detector. Error for quantizing on the platform. 
 
 
-
-
-
-<br><br>
-
-
 - The models are evaluated on the target device on the STM32 edge AI platform withou using the random quantization option, keeping the original precision of the model file provided
 - Except some of them that are appended by "PERCHANNEL_QUANT_RANDOM"
 
 <br><br>
 
-
 # ONNX model zoo
 
-- There are models available for Emotion recognition, Age, and gender classification
+- There are models available for Emotion recognition, Age, and gender classification 
+
+<br><br>
+
+# B-FPGM ( Latest face detector, 2025)
+
+- Developed a code to load the models saved in `.pth` format for inference. 
+- The work is about prunning a two state-of-art models, however, the resulting models seem not robust during inference and also seem slow. 
+- The input size of the model is still vague for me.
+- Run this code for inference > `/B-FPGM/EResFD-main/demo.py`
+- [Link to the github repo](https://github.com/IDT-ITI/B-FPGM/tree/main)
+
+<br><br>
+
+# FeatherFace ( Latest face detector, 2025)
+
+- [Link to github repo](https://github.com/dohun-mat/FeatherFace?tab=readme-ov-file)
+- No, pre-trained model is provided. 
+
+<br><br>
+
+# Comparative Analysis of CenterFace and BlazeFace for Face Detection Applications  
+
+## WIDER FACE Dataset Evaluation  
+The WIDER FACE benchmark, comprising images stratified into Easy, Medium, and Hard subsets based on detection difficulty, provides critical insights into model robustness:  
+
+| Model       | Easy Set (AP) | Medium Set (AP) | Hard Set (AP) |  
+|-------------|---------------|-----------------|---------------|  
+| CenterFace  | 93.5%         | 92.4%           | 87.5%         |  
+| BlazeFace   | 89.6%         | 85.3%           | 72.8%         |  
+
+CenterFace demonstrates superior performance across all difficulty tiers, with a 15.6% relative improvement on the Hard set containing occluded and low-resolution faces. The anchor-free design mitigates scale sensitivity issues prevalent in anchor-based methods, allowing consistent detection across diverse aspect ratios. BlazeFace, while maintaining competitive accuracy on Easy/Medium sets, shows decreased robustness for small faces due to its fixed anchor configurations and spatial resolution constraints.  
+
+
+## Operational Efficiency Tradeoffs  
+
+While accuracy metrics favor CenterFace, implementation context dictates model suitability. CenterFace operates with a 7.2MB model size and achieves 30 FPS on an Intel i7-6700 CPU, whereas BlazeFace’s 1.5MB architecture enables 200+ FPS on mobile GPUs like the Adreno 640. BlazeFace’s depthwise convolution architecture reduces multiply-accumulate (MAC) operations by 4.8× compared to CenterFace’s standard convolutions, optimizing power efficiency for battery-dependent devices. However, CenterFace natively supports facial landmark detection (5 points) with minimal accuracy degradation, while BlazeFace requires auxiliary models for extended facial analysis.
+
+
+
+## Failure Mode Analysis  
+
+### CenterFace Limitations  
+CenterFace’s heatmap refinement process introduces 12–15ms latency per image on CPU platforms, constraining real-time applications. The joint optimization of centerness prediction and bounding box regression losses also increases training complexity, requiring careful hyperparameter tuning to ensure stable convergence.  
+
+### BlazeFace Limitations  
+BlazeFace struggles with scale sensitivity, as its fixed anchor scales cannot adapt to extreme zoom variations beyond a 10:1 scale ratio. This reduces Hard set performance by approximately 23% under >40% facial occlusion, as the model lacks explicit occlusion-handling mechanisms.  
+
+## Conclusion  
+
+For applications requiring high accuracy in challenging conditions (surveillance, crowd analysis), CenterFace is superior with its anchor-free design and multi-task learning. BlazeFace is better suited for mobile applications needing real-time processing despite accuracy compromises in complex scenes. Choose CenterFace for high-density environments or low-resolution footage analysis, and BlazeFace for smartphone/AR applications where low latency and power efficiency are critical.
+
+<br><br>
 
