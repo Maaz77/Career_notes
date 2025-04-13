@@ -1295,6 +1295,9 @@ MBConv optimizes the trade-off between accuracy and computational cost, enabling
 
 - This model outputs three numbers that I think are related to three angles of a head. 
 - I should be coupled with a face detector for real applications. I did not run the models. 
+- [official repo for adas head pose estimation](https://github.com/openvinotoolkit/open_model_zoo/tree/master/models/intel/head-pose-estimation-adas-0001) -> some refrences for gaze estimations as well are available
+- I think the demo code used in the PINTO model zoo or the official repo are working with openvino models. 
+- The three version of the models (onnx, openvion, tflite) are evaluated on BIWI test set.
 
 ## YuNet
 
@@ -1318,7 +1321,6 @@ MBConv optimizes the trade-off between accuracy and computational cost, enabling
 ## Lightweight Pose Estimation
 
 - A lightweight model for headpose estimation
-- Probably the model should be coupled with a face detector since the model outputs only 3 numbers regarding the angles of the face.
 
 ## 6DRepNet
 
@@ -1533,6 +1535,8 @@ MBConv optimizes the trade-off between accuracy and computational cost, enabling
 
 # Comparative Analysis of CenterFace and BlazeFace for Face Detection Applications  
 
+- ***[Check out this repository](https://github.com/Maaz77/face-detector-quantization/tree/main?tab=readme-ov-file)***
+
 ## WIDER FACE Dataset Evaluation  
 The WIDER FACE benchmark, comprising images stratified into Easy, Medium, and Hard subsets based on detection difficulty, provides critical insights into model robustness:  
 
@@ -1563,4 +1567,228 @@ BlazeFace struggles with scale sensitivity, as its fixed anchor scales cannot ad
 For applications requiring high accuracy in challenging conditions (surveillance, crowd analysis), CenterFace is superior with its anchor-free design and multi-task learning. BlazeFace is better suited for mobile applications needing real-time processing despite accuracy compromises in complex scenes. Choose CenterFace for high-density environments or low-resolution footage analysis, and BlazeFace for smartphone/AR applications where low latency and power efficiency are critical.
 
 <br><br>
+
+----
+----
+----
+
+# Head Pose Estimation
+
+## [Real Time Head Pose Estimation](https://github.com/yakhyo/head-pose-estimation/tree/main?tab=readme-ov-file)
+- This repo contains several models for head pose estimation from heavy to light weight models. Based on ResNet and MobileNet.
+- It must be coupled with a face/head detector
+- Tried to load the pytorch MobileNetV2 version and convert it to `.onnx` network to deploy it on the STM32N6 device but i got and error regarding the output dimension. 
+- I could not figure out why there was the problem 
+- Tried to use the `onnx2tf` package to convert the onnx model to `.tflite` and then deploy it on the device, however, the same error showed up with the tflite model on the ST platform.
+
+## DMHead
+- Apparently, the models in this PINTO model zoo repo are based on MobileNetV2 but only the `dmhead` versions.
+- Tried to deploy the models on the platform, however, there were an error. 
+- Used `onnx2tf` to deploy the tflite version of these models on the platform, again there was an error.
+- Check out the `Models Found` directory.
+
+```diff
+- My intention was in this step to find the lightest version of a head pose estimator model to couple it with BlazeFace or CenterFace to assess the performance and latency.
+- I was targeting the models based on MobileNet like the two aforementioned steps. But, yet did not found any model that is compatible with ST platform.
+```
+
+## [Head Pose Estimation by landmarks](https://github.com/yinguobing/head-pose-estimation/tree/master)
+- In this work a network is used to extract 68 landmarks from the region of the face.
+- Another rule based scritps is used to output the head pose having these face landmarks.
+- The landmark model is tested on the Platform and it gives 25ms latency. The model seems lights weight. 
+- ***I have to test is for inference then if it is good i will use it for quantization***
+
+- `LwPosr – Lightweight Efficient Fine-Grained Head Pose Estimation` and `MobileNet` are the most top efficient networks for pose estimation.
+
+
+# Head Pose Estimation Datasets 
+
+## [Biwi Kinect Head Pose Database](https://www.kaggle.com/datasets/kmader/biwi-kinect-head-pose-database/data)
+  - The dataset is a bit complicated.
+  - The images are not only the region of face. They are captures from a position of 1 meter from the subject. 
+  - In this [huggingface link](https://huggingface.co/datasets/ETHZurich/biwi_kinect_head_pose) there is a code provided to load the dataset.
+  - In this [google colab notebook](https://colab.research.google.com/drive/14AWKhaC7H5pG7I53D-NuknfwCdEJYMR1?usp=sharing) I have tried to load the dataset.
+  - But, since the dataset is annotation is a bit complicated and the images are not image of the face, I skip it for now.
+  - The BIWI Kinect Head Pose dataset does not explicitly provide ground truth face bounding boxes directly in the dataset files.
+  - Head poses are estimated by in-depth information from Kinect.(DirectMHP paper)
+  - A major drawback of these datasets is that the Euler angles are narrowed in the range of (−99◦,99◦). (DirectMHP paper)
+
+
+## [300W-LP](http://www.cbsr.ia.ac.cn/users/xiangyuzhu/projects/3DDFA/main.htm)
+  - The synthesized large-pose face images from 300W
+  - The dataset contains some parameters from the camera, shape, and so on. 
+  - The pose of the head is provided by radian angles.
+  - The dataset is also accessible by [Tensorflow](https://www.tensorflow.org/datasets/catalog/the300w_lp).
+  - The images of the face are derived from rotating a 3D face mesh of face to capture large poses so that in these cases the image is deformed. 
+  - [Link to google colab](https://colab.research.google.com/drive/1IsjYZ-IIWumHV7YThW_bY6ibrNcI7kIR?usp=sharing)
+  - The Basel Face Model is a 3D Morphable Model (3DMM) — a statistical model of 3D human face shape and texture.
+
+## [ETH-XGaze](https://ait.ethz.ch/xgaze)
+
+  - It is a very good dataset for gaze estimation. 
+  - However, the label for gaze direction is provided in 2d (Pitach and Yaw), the roll is not provided.
+  - They normalize the face region so that the two eyes are horizontaly aligned so the roll is cancled out.
+  - Since we want the head pose estimation and face detection be unified in a single network, the dataset is not suitable for out task for now. 
+  - [Github Link](https://github.com/xucong-zhang/ETH-XGaze)
+
+## [DD-Pose](https://dd-pose-dataset.tudelft.nl/eval/overview/statistics)
+
+  - Images of human driving, very good dataset
+  - Labels are 6 DoF. 3 for rotation (YPR), and 3 for translation: how the head is positioned in 3D space along X, Y, and Z axes.
+  - The 3D translation vector (t_x, t_y, t_z) tells you the position of the head’s center (usually the nose bridge or eye center) relative to the camera.
+  - We should request to get access to the dataset
+
+## UET-Headpose
+
+  - Seems a good dataset but the download link is not provided. 
+
+## [AFLW2000](http://www.cbsr.ia.ac.cn/users/xiangyuzhu/projects/3DDFA/main.htm)
+
+  - This dataset does not contain explicitly the head pose angles, however, it contains 68 3d points landmarks of the the face. 
+  - It is possible to use these 3d points to extract the head pose by solving `A Perspective-n-Point (PnP)` problem (or a fitting model) and also having the intrinsic camera parameters. 
+  - It is also [available in tensorflow](https://www.tensorflow.org/datasets/catalog/aflw2k3d)
+
+## AGORA & CMU Dataset
+
+  - These are datasets of video of som people carrying on an activity.
+  - In the paper `DirectMHP`, these dataset is to build up another version of the datasets so that they contains the human faces plut head pose labels.
+  - For now, we can skip these datasets. 
+  - [Github Link](https://github.com/hnuzhy/DirectMHP?tab=readme-ov-file#mphpe-datasets)
+
+
+## [Good to go Datasets](https://github.com/shamangary/FSA-Net/blob/master/README.md#1-data-pre-processing)
+
+  - The images spatial size are `64x64`
+  - Only images of the faces regions 
+  - The biwi dataset has a subset namd `BIWI_NoTrack.npz`. This dataset, contains the same images as in the other two images but excluding the frames that the face detector failed to detect the faces. 
+
+
+# Experiment on Benchmarking Head Pose Estimator SOTA Models from PINTO Model Zoo
+
+## WHENet 
+  - The .h5 model from the [official Repository](https://github.com/Ascend-Research/HeadPoseEstimation-WHENet) of the work is used for Benchmarking.
+  - Model uses classification instead of regression - outputs probability distributions over discrete angle bins
+  - Yaw head: 120-dimensional output (likely covering -180° to +180° range with 3° per bin)
+  - Pitch and Roll heads: Each 66-dimensional output (covering smaller angle ranges since head has more limited pitch/roll movement than yaw)
+  - the results from both the PINTO Model and the official repository is available. 
+  - did not double check the coding.
+
+## Head Pose Estimation Adas-0001
+  - A vanilla CNN network for regressing the angles of the head pose.
+  - The three version of the model (onnx, tflite, openvion) are evaluated on the BIWI test set. 
+
+## 6DRepNet360 
+  - the onnx version of the model obtained from PINTO MODEL ZOO is evaluated on the BIWI test set.
+  - ***It is important to mention that, the PINTO model outputs the 3 scalars related to angels while the official models output 3*3 rotation matrix.**
+  - [In the official Repo](https://github.com/thohemp/6DRepNet360/tree/master) there are some codes to read the benchmark head pose datasets and their labels.
+  - As far as i can see, the code i developed for evaluating the models from the official repo is correct, considering the rotation matricies and angles of the labels.  
+  - The code i used for evaluating the models from the official repo is a bit complicated. 
+  - Checked the order of matching labels and the output of the model. the one in the code is correct
+
+## 6DRepNet 
+  - [Official Repo](https://github.com/thohemp/6DRepNet)
+  - there are pytorch trained model files in the repo
+  - there are links to head pose datasets in the repo 
+  - ***skipping it as of now because this work is a older version of the 6DRepNet360 model.**
+
+
+## DMHead
+  - the evaluation results are available. 
+  - the models used are from PINTO.
+  - the [original repo](https://github.com/PINTO0309/DMHead?tab=readme-ov-file) is also a PINTO repo
+
+## LightWeight-HeadPose-Estmiation
+
+  - regarding the models on PINTO MODEL ZOO, i am not sure about the order of output angles.
+  - [Official Repo](https://github.com/Shaw-git/Lightweight-Head-Pose-Estimation/tree/main)
+
+## Opal23 HeadPose 
+
+  - The model on the PINTO Model zoo is evaluated, however the results are so pessimistic.
+  - Tried a lot to run and evaluate the model on the official repo as it is mentioned in the README of the official repo, however, it was lacking some model file dependencies for SSD framework so it was not working.
+  - Tried to alter the code to use only head pose detection network on the test dataset but it was not working. The framework is exteremly complicated.
+
+## DirectMHP 
+
+  - The thing about this model is that the model do face detection as well, so in most of the cases in the test images it could not detect anyface so the outputs for the pose angles are useless. To this end, I exclude this model for now from benchmarking.
+  - The code to evaluate the model on the test set for models obtained from PINTO MODEL ZOO is available. The models are not performing well on the testset. 
+
+# Different protocols/paths for training and evaluating the head-pose regressor model 
+
+## Protocol 1
+  - Train on `300w-lp`:
+    - A. Test on `AFLW2000` 
+    - B. Test on `BIWI_Test` (30% of `BIWI`)
+## Protocol 2 : 
+  - Train on `BIWI_Train`
+     - A. Test on `BIWI_Test`
+     - B. Test on `AFLW200` -> This approach is not practiced in the SOTA
+## Protocol 3 (not practiced in the SOTA): 
+  - Train on `BIWI_Train` + `300w-lp` 
+    - A. Test on `BIWI_Test`
+    - B. Test on `AFLW200`
+
+```diff 
++ So far, the protocol 2.A is done. Now, we are aiming to do 2.B evaluation to see if the performance is satisfying, otherwise we go to protocol 3. 
+```
+
+## Protocol 2.A Benchmarking SOTA models
+
+<!-- | Method   | Yaw  | Pitch | Roll | MAE  |
+|----------|------|-------|------|------|
+| HopeNet  | 3.29 | 3.39  | 3.00 | 3.23 |
+| FSA-Net  | 2.89 | 4.29  | 3.60 | 3.60 |
+| TriNet   | 2.93 | 3.04  | 2.44 | 2.80 |
+| FDN      | 3.00 | 3.98  | 2.88 | 3.29 |
+| 6DRepNet | 2.69 | 2.92  | 2.36 | 2.66 |
+| DeepHeadPose| 5.67 | 5.18 | - | -     |
+| SSR-Net-MD| 4.24 | 4.35 | 4.19 | 4.26 |
+| VGG16|    3.91   | 4.03 | 3.03 | 3.66 | 
+|FSA-Caps-Fusion| 2.89 | 4.29 | 3.60 | 3.60|
+|HeadPosr EH64| 2.59 | 4.03 |3.53 | 3.38 |
+|THESL-Net |	2.53| 	3.08|	2.95	|2.85| 
+|MFDNet |2.99	|3.68|	2.99|	3.22|
+|ST-ViT | 3.27 | 2.82| 3.12 | 3.07|  -->
+
+
+| Method | Yaw | Pitch | Roll | MAE |
+|--------|-----|-------|------|-----|
+| 6DRepNet | 2.69 | 2.92 | 2.36 | 2.66 |
+| TriNet | 2.93 | 3.04 | 2.44 | 2.80 |
+| THESL-Net | 2.53 | 3.08 | 2.95 | 2.85 |
+| ST-ViT | 3.27 | 2.82 | 3.12 | 3.07 |
+| MFDNet | 2.99 | 3.68 | 2.99 | 3.22 |
+| HopeNet | 3.29 | 3.39 | 3.00 | 3.23 |
+| FDN | 3.00 | 3.98 | 2.88 | 3.29 |
+| HeadPosr EH64 | 2.59 | 4.03 | 3.53 | 3.38 |
+| FSA-Net | 2.89 | 4.29 | 3.60 | 3.60 |
+| FSA-Caps-Fusion | 2.89 | 4.29 | 3.60 | 3.60 |
+| VGG16 | 3.91 | 4.03 | 3.03 | 3.66 |
+| SSR-Net-MD | 4.24 | 4.35 | 4.19 | 4.26 |
+| DeepHeadPose | 5.67 | 5.18 | - | - |
+
+
+
+
+- References: 
+  * https://github.com/thohemp/6DRepNet?tab=readme-ov-file
+  * [FSA-Net: Learning Fine-Grained Structure Aggregation for Head Pose Estimation from a Single Image](https://openaccess.thecvf.com/content_CVPR_2019/papers/Yang_FSA-Net_Learning_Fine-Grained_Structure_Aggregation_for_Head_Pose_Estimation_From_CVPR_2019_paper.pdf)
+  * [HeadPosr: End-to-end Trainable Head Pose Estimation usingTransformer Encoders](https://arxiv.org/pdf/2202.03548#:~:text=RGB,38)
+  * [An Improved Tiered Head Pose Estimation Network with Self-Adjust Loss Function](https://www.mdpi.com/1099-4300/24/7/974#:~:text=FSA,Net%202.53%203.08%202.95%202.85)
+  * [Towards Human-CenteredAutomated Driving: A Novel Spatial-Temporal Vision Transformer-Enabled Head Tracker](https://dspace.lib.cranfield.ac.uk/server/api/core/bitstreams/bf71427b-5a11-4d18-bdb1-ab5d4378a457/content)
+- There is other method  [Self-Attention Mechanism-Based Head Pose Estimation Network with Fusion of Point Cloud and Image Features](https://pmc.ncbi.nlm.nih.gov/articles/PMC10747419/#:~:text=that%20the%20average%20absolute%20errors,BIWI%20head%20pose%20recognition%20accuracy) that is performing much better than the above methods.
+
+
+## Protocol 2 Benchmarking our models for `96dim` feature 
+
+| Model ID | MAE (on `BIWI_Test`)      | # Params | MAE on `AFLW2000` | Dataset Train
+|----------|---------------------------|----------|-------------------|--------------------------|
+| rd93oeou | 2.32                      | 101155   | 8.09              |BIWI_Train + BIWI_NoTrack | 
+| wnfcrqss | 2.34                      | 80019    | 8.38              | BIWI_Train + BIWI_NoTrack| 
+| za1bxuzn | 2.54                      | 34707    | 8.12              | BIWI_Train + BIWI_NoTrack| 
+| cl4obelj | 3.68                      | 3683     |  8.67             | BIWI_Train
+|yav3m4y3  | 3.74                      | 3683     | 8.35              | BIWI_Train
+
+
+
 
