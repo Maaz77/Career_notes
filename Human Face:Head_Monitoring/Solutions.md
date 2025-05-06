@@ -89,6 +89,34 @@
 - [B-FPGM ( Latest face detector, 2025)](#b-fpgm--latest-face-detector-2025)
 - [FeatherFace ( Latest face detector, 2025)](#featherface--latest-face-detector-2025)
 - [Comparative Analysis of CenterFace and BlazeFace for Face Detection Applications](#comparative-analysis-of-centerface-and-blazeface-for-face-detection-applications)
+- [Head Pose Estimation](#head-pose-estimation)
+  - [Real Time Head Pose Estimation](#real-time-head-pose-estimation)
+  - [DMHead](#dmhead)
+  - [Head Pose Estimation by Landmarks](#head-pose-estimation-by-landmarks)
+- [Head Pose Estimation Datasets](#head-pose-estimation-datasets)
+  - [Biwi Kinect Head Pose Database](#biwi-kinect-head-pose-database)
+  - [300W-LP](#300w-lp)
+  - [ETH-XGaze](#eth-xgaze)
+  - [DD-Pose](#dd-pose)
+  - [UET-Headpose](#uet-headpose)
+  - [AFLW2000](#aflw2000)
+  - [AGORA & CMU Dataset](#agora--cmu-dataset)
+  - [Good to Go Datasets](#good-to-go-datasets)
+- [Experiment on Benchmarking Head Pose Estimator SOTA Models from PINTO Model Zoo](#experiment-on-benchmarking-head-pose-estimator-sota-models-from-pinto-model-zoo)
+  - [WHENet](#whenet)
+  - [Head Pose Estimation Adas-0001](#head-pose-estimation-adas-0001)
+  - [6DRepNet360](#6drepnet360)
+  - [6DRepNet](#6drepnet)
+  - [DMHead](#dmhead)
+  - [LightWeight-HeadPose-Estimation](#lightweight-headpose-estimation)
+  - [Opal23 HeadPose](#opal23-headpose)
+  - [DirectMHP](#directmhp)
+- [Different Protocols/Paths for Training and Evaluating the Head-Pose Regressor Model](#different-protocolspaths-for-training-and-evaluating-the-head-pose-regressor-model)
+  - [Protocol 1](#protocol-1)
+  - [Protocol 2](#protocol-2)
+  - [Protocol 3](#protocol-3)
+- [Protocol 2.A Benchmarking SOTA Models](#protocol-2a-benchmarking-sota-models)
+- [Protocol 2 Benchmarking of Our Models for `96dim` Feature](#protocol-2-benchmarking-of-our-models-for-96dim-feature)
 
 
 <br><br>
@@ -1779,16 +1807,51 @@ For applications requiring high accuracy in challenging conditions (surveillance
 - There is other method  [Self-Attention Mechanism-Based Head Pose Estimation Network with Fusion of Point Cloud and Image Features](https://pmc.ncbi.nlm.nih.gov/articles/PMC10747419/#:~:text=that%20the%20average%20absolute%20errors,BIWI%20head%20pose%20recognition%20accuracy) that is performing much better than the above methods.
 
 
-## Protocol 2 Benchmarking our models for `96dim` feature 
+## Protocol 2 Benchmarking of our models for `96dim` features
 
-| Model ID | MAE (on `BIWI_Test`)      | # Params | MAE on `AFLW2000` | Dataset Train
+| Model ID | MAE (on `BIWI_Test`)      | # Params | MAE on `AFLW2000` | Dataset Train            |
 |----------|---------------------------|----------|-------------------|--------------------------|
 | rd93oeou | 2.32                      | 101155   | 8.09              |BIWI_Train + BIWI_NoTrack | 
 | wnfcrqss | 2.34                      | 80019    | 8.38              | BIWI_Train + BIWI_NoTrack| 
 | za1bxuzn | 2.54                      | 34707    | 8.12              | BIWI_Train + BIWI_NoTrack| 
+|hrchr82r  | 3.09                      | 3683     | 8.03              | BIWI_Train + BIWI_NoTrack|
 | cl4obelj | 3.68                      | 3683     |  8.67             | BIWI_Train
 |yav3m4y3  | 3.74                      | 3683     | 8.35              | BIWI_Train
 
+### Analysis The Training Experiments for `96dim` Models
 
+![test_mae vs params num 96dim](./Assets/test96.png "Test_MAE vs #Params for 96dim models")
+
+
+- According on the above graph the colored dots are pareto front models, and based on the elbow method the green model which is `hrchr82r` is an equilibrium point between perfromance and efficiency. 
+- The x-axis is in Log Scale.
+
+
+## Protocol 2 Benchmarking of our models for `88dim` features 
+
+| Model ID | MAE (on `BIWI_Test`)      | # Params | MAE on `AFLW2000` | Dataset Train            |
+|----------|---------------------------|----------|-------------------|--------------------------|
+| c1a88c64 | 2.89                      | 1753603  | 7.98              | BIWI_Train + BIWI_NoTrack|
+| stoqa9pt | 3.44                      | 5891     | 7.81              | BIWI_Train + BIWI_NoTrack|
+| 9w31h50k | 3.65                      | 3219     | 8.34              | BIWI_Train + BIWI_NoTrack|
+| 4121t6zb | 5.07                      | 267      | 8.63              | BIWI_Train               | 
+
+
+### Analysis The Training Experiments for `88dim` Models
+
+![test_mae vs Params num 88dim](./Assets/test88d.png "Test_MAE Vs #Params for 88dim models")
+
+
+
+
+
+![test_mae_AFLW2000 vs Params num 88dim](./Assets/aflw88d.png "Test_MAE_AFLW2000 vs #Params for 88dim models")
+
+- According on the above graphs the colored dots are pareto front models, and based on the elbow method, the purple model which is `stoqa9pt` is an equilibrium point between perfromance and efficiency. And, is an elbow point in both of the graphs.
+- The x-axis is in Log Scale.
+
+# To Do 
+
++ for reg1 4 models selected based on different criterias. do the same for reg2 model. visually assess how these models are performing on realtime inference. is there a big difference between them visually evaluating ? add the table like above for these models. apply the same reasoning of the chatgpt to select the 96dim model as well and visually perform the evaluation. 
 
 
