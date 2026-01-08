@@ -115,8 +115,8 @@
   - [Protocol 1](#protocol-1)
   - [Protocol 2](#protocol-2)
   - [Protocol 3](#protocol-3)
-- [Protocol 2.A Benchmarking SOTA Models](#protocol-2a-benchmarking-sota-models)
-- [Protocol 2 Benchmarking of Our Models for `96dim` Feature](#protocol-2-benchmarking-of-our-models-for-96dim-feature)
+  - [Protocol 2.A Benchmarking SOTA Models](#protocol-2a-benchmarking-sota-models)
+  - [Protocol 2 Benchmarking of Our Models for `96dim` Feature](#protocol-2-benchmarking-of-our-models-for-96dim-feature)
 
 
 <br><br>
@@ -1685,7 +1685,6 @@ For applications requiring high accuracy in challenging conditions (surveillance
 
 
 ## [Good to go Datasets](https://github.com/shamangary/FSA-Net/blob/master/README.md#1-data-pre-processing)
-
   - The images spatial size are `64x64`
   - Only images of the faces regions 
   - The biwi dataset has a subset namd `BIWI_NoTrack.npz`. This dataset, contains the same images as in the other two images but excluding the frames that the face detector failed to detect the faces. 
@@ -1850,8 +1849,294 @@ For applications requiring high accuracy in challenging conditions (surveillance
 - According on the above graphs the colored dots are pareto front models, and based on the elbow method, the purple model which is `stoqa9pt` is an equilibrium point between perfromance and efficiency. And, is an elbow point in both of the graphs.
 - The x-axis is in Log Scale.
 
+
+## Benchmarking of the `Reg+Cls` Approach of our models
+
+| Model ID | MAE (on `BIWI_Test`)      | # Params | MAE on `AFLW2000` | Dataset Train            |
+|----------|---------------------------|----------|-------------------|--------------------------|
+| z1jds5oz | 2.61                      | 102598   | 6.62              | All Datasets              |
+| igw83w52 | 2.79                      | 38070    | 6.58              | All Datasets              |
+| 9vrsjsav | 2.91                      | 6098     |                   | BIWI_Train + BIWI_NoTrack|
+| ir8mhihd | 3.11                      | 3148     |                   | BIWI_Train + BIWI_NoTrack| 
+| 82ywyoqm | 3.53                      | 1673     | 6.10              | All Datasets             |
+| l1rszxji | 3.68                      | 3148     |                   | BIWI_Train               |
+| luexu3z6 | 3.80                      | 883      | 6.09              | All Datasets
+
+- The models lacking the accuracy on AFLW2000, are not restorable since they have custom hard swish function.
+- 
+
+
+# Challenges so far 
+
++ tensorflow version mismatch. If I train networks with tf 2.19, I get error on ST platform for input shape. for training 88models I use tf 2.15 however I still get an error which is for models spatial dims which is None, but I hope that when the models are joined, the unified model does not arise the same error on the platform. 
+
++ Things done so far for qunatization:
+  - In order to take advantage of qunatization techniques in tf 2.19 (higher than 2.15) we need to load the BlazePoser with tf 2.19. It was not straightforward, since the BlazePoser was developed originally with tf 2.13, so while loading the model in tf 2.19 there were a lot of errors and coflicts. Several solutions triend to take over the problem but none of them worked such as saving the model in tf 2.13 in save model format or weights and architectures format to retrieve them back with tf 2.19. None of them worked. Finally, the architecture of the BlazePoser is reconstructed with tf 2.19 and the weights from tf 2.13 are mounted on it to have the model in tf 2.19. 
+
+  - In tf 2.13, different versions of calibration datasets (such as AFLW2000, custom dataset, and etc.) are used to PTQ the BlazePoser but finally a small set of custom dataset captured from the frames of myself was useful. 
+  - In tf 2.13, manually I have obtained the histogram of activation valuse for each layer in the model, and observed that most of the layers have a normal shape histogram except some layers that where deeper. 
+  - The dataset that where used for calibration in PTQ is then used for testing how much the outputs produced by the .tflite quantized model differ from the original .h5 model. 
+  - In tf 2.19, some layers that where hardly affected by quantization are excluded from PTQ to stay in their float32 precision, however, suprisingly``` the performance  was not improve and even it droped for some outputs```
+  - In the Utilites.py in the function quantize_selectiveV2() i have tried a lot to take advantage of  quantization options to improve the statistics and using histogram method for calibration of activation, but the code is not working. it has sth to do with the proto buff file for google. i dont know. :((
+  - 29 July, I have tried the `nncf` package to quantize the model, the code is on google colab. the result is not differenting from the previous quantized models using the TFLite. 
+
 # To Do 
 
-+ for reg1 4 models selected based on different criterias. do the same for reg2 model. visually assess how these models are performing on realtime inference. is there a big difference between them visually evaluating ? add the table like above for these models. apply the same reasoning of the chatgpt to select the 96dim model as well and visually perform the evaluation. 
++ So far I have tried two experiments for PTQ. One is clipping the .5 and .95 percentile of the calib data values, and the other on the excluding some layers which are output layers for head 1 face regressor and head2 face regressor and classificator as well as the add-relu layer before the deep prediction head. none of the solutions seems promissing to improve the accuracy of the qunatized model. So, now I want to increase more the calibration dataset. 
+
+- the latest work : I have created a new calib dataset, remove the use of load_and_preprocessdata() function, just directly use the new calib data from the blazeface frames, use both standardize and withou standardization of the data apparently without the standardization the result is better. final model is the origina_V3 which seems promissing. 
+
+- Things to do : 
+
+
+
++ Things i am doing to imprve the QAT: 
+  1. use kaggle face train dataset + 2dheadpose dataset to have a very diverse extensive dataset for QAT fine-tuning.
+  2. trying to initialize the activation stats of the model for the initial steps of the QAT fine-tuning. 
+  3. a warm-up procedure is added before starting the training loop for addressing the previous step.
+  4. the stochastic layer during warm up are disabled then restored. 
+  5. I want to see if there are some layers that have outlier exploded datavalues in their activation, to add a relux after the layer to clip those activations. but i need to collect those stats with and extensive rep data and check after this clipping if the model is compromised or not. 
+  6. I have collected an rep data to collect the activations statistics.
+  7. I have tried different clipping values for different activations, but i think the best one is that only clipping the values of faceregressor heads to clamp them betwee -128 and +128. 
+  8. Another thing I have done is to add a scaled tangenthyperbolic function after this clipping to have the outputs values of the face regressor between -1 and +1, it was believed that having this small dynamic range for those outputs improve a lot the quantized model. But there are a few problems: 
+    - if we use pure tanh() function, the values saturate so quickly in the function so that they are not invertible for the framework. 
+    - if we use a customized version of the tanh so that the values saturate later, when we quantize the model in .tflite, the computation graph of the .tflite model, dequantize the activation before giving it to the customized tanh function at the end, which is not what we want since this dequantization process downgrades a lot the model. we should avoid it as much as possible in the model. 
+    - the tf.atan() function which is arctan() or tan-1() function, if we use it in the computation graph of the model, since there is not .tflite implementation for it, it falls back to the tf float operations so that is why we have a dequantize/quantize nodes around the "FlexAtan" node which degrade the performance.
+    - ***As far as I have experimented, we cannot use any custom activation function which is not supported in INT8 in tflite.***
+    - Another idea is that we can divide the weights of the face regs output layers by 128 instead of clipping the value and it is improving the debug stats of the output layer significantly. the quantized performance of the model is good but not sth special.
+
+    - ***So far, the best clipping activation model is produced, this is the best we can get in PTQ, the model is used to produce soft labels for QAT***
+
+    
+    
+
+# tensorflow-GPU-tensorflow_model_Optimization issue report
+
+  the problem is that `tensorflow_model_optimization (tfmot)` is not compatible with tf > 2,16 and keras 3, so we must migrate to keras 2 and tf < 2.16 to have keras 2.x compatible with `tfmot`. On the other hand, on our system with GPU, we cannot having in a straghtforward way any tensorflow version below or equal 2.14 that works without any conflicts using GPU of the system. The rooted problem is that using those versions of tf we get the CuDNN library not found issue. Finally, the only version of the tf we can use below 2.16 and above 2.14 is `tf 2.15`. However, when we install tfmot with tf 2.15 the latest version of the `tfmot 0.8.0` is installed. The new problem is that eventhough the keras version now is 2.x but it is conflicting with `tfmot 0.8.0`, which at this step we should roll back to `tfmot 0.7.5` version. At this point all is good to go : `tf 2.15`, `tfmot 0.7.5`, and `python 310`.    
+        
+# QAT fake Nodes annotation report
+
+  generally when the model is wrapped by fakewquant observers and we want to PTQ it get the .tflite, we do not need a calibration dataset. however, for out case, since some layers like padding are not annotated to wrap by fakequant nodes, the tflite converter needs a calib dataset to fully qunatize the whole model layers. i think this is the problem. I hope the calib data does not reuin the normal layers that have the min/max during QAT. 
+
+# Remove and add relu issue report
+
+  for qat we need to remove the relu, since the new fine tun dataset is build without having relu on face classifier heads to have negative values as well for adjusting the loss and learning process. the problem is that we need to revert back this relu after fine tuning is finished, which is not straight forward to add  relu as the activation function of the conv2d clasificatior of face.
+
+# QAT final pipeline challenge.
+
+  After performing QAT finetuning for models, and use the 20 samples from calib data(deterministic), i have performed 4 exps, in each on of them i increased the size of fine tuning dataset and observed that the final evaluation metric which is MAE on raw outputs of the resulting .tflite model vs original first .h5 model is improving, but the real time inference prediction is ruined and gets worsened by fine tuning. so far the best .tflite model in real time prediction is the model which is clipped activations and converted to .tflite with 20 samples of the calib data. 
+
+  Now, I need to experiment that : a) increasing the size of calib data for the models that are fine tuned helps to improve predicitons b) if the calib data alter the dynamic range captured during training for the annotated nodes. I am thinking that when the model is fine tuned we need to give it a large calib data while the large calib data used to ruin the converted model predicitons in only PTQ process without any QAT fine tuning. lets experiment it. The code of these experiments are in /PTQ_BlazePoser/test_Quantization.py. >>> the qat model is not changing the dynamic range with any calib data since they are fixed during fine tune process.
+
+  - I tried to replicate the w and b of the qat model and use a calib data for calibrating the dynamic range but it is not possible do it. i tried a lot.
+
+  - I triend to load the fine tuned qat and give it a new calib data to adjust the min max but i did not help. 
+
+  - The problem is that, the range of activation that are learned during training is corrupted so the .tflite resulting model is not good. 
+  ## GPT Prompt
+  
+    Background Information : There is an original float32 blazeposer model let's call it "BlazePoser_fp32". This model is an extension of the "BlazeFace" model for face and facial landmark detection developed by google, which it is extended by me so that to also regress the human head pose, which yields "BlazePoser" framework. 
+
+    General Objective : The main goal is that to convert the "BlazePoser_fp32" which is now performing accuratly to INT8 .tflite version so that it is fully quantized beside the input and output of the model which are kept in float32 precision. It is important to perform this quantization process so that the accuracy and performance of the model is maintained at the most.
+
+    Quantization Process Experiment Explanation: 
+
+    0.  As you know, the architecture of the model is like MobileNet which is a compact architecture. To make the "BlazePoser_fp32" quantization friendly, a few modifications are done on the model architecture. It is observed that the modification improved PTQ process of converting the model to fully int8 precision with a calib data. The modifications are as follow, a) A "relu" layer is added to the output of face classifier heads  so that the dynamic range of the this head is tamed which improve the resolution of quantization scale. b) for some layers in the model a clipActivation() activation  is added to for the same reason. To be more specific, since quantizing the raw "BlazePoser_fp32" raising a model that is not performing very good due to the fact that the dynamic ranges are not tamed so they explode which ruins the scale resolution of activations. The statistics of the activations of all layers are collected by an extensive dataset. So, the clipping parameters for each layer are accurately selected so that the outlier and extreme values are clamped so we have a narrower dynamic range. The layers that have this parametric clip activation does not have any activation already. The layers are point-wise convolution in the feature extraction blocks as well as the outputting face (BB and landmarks) regressors since the values of these heads do not make sense to have values out of the range -128 and + 128 since the input image is of size 128*128 and these values are offsets for refining the default BB. Finally, from now on, the "BlazePoser_fp32" is the model that has these clipactivations in the layers. It is not raw original model. Keep it in mind. 
+
+    1.  the converter() tool  of tensorflow.lite package is used and given it a unique calibration dataset and quantize to INT8 fully .tflite the model (BlazePoser_fp32), so lets call the reulting quantized model : "BlazePoser_int8". 
+
+    2. I use the tensorflow_model_optimization package and wrap the "BlazePoser_fp32" with fake quant nodes and perform a quantization aware fine tuning with soft labels generated as explained in the following section. The objective to do this is to perform teacher student quantization aware fine tuning. The resulting models is called "BlazePoser_QAT_fp32", this model has the layers wrapped in fakequant node observers that are having min/max values per weights and activations. The min/max are configured during training process. 
+
+    3. then i use the "BlazePoser_QAT_fp32" and convert it to fully int8 .tflite model using a small calib data, so lets call it : "BlazePoser_QAT_int8" . The calibdata used in here is the calib data used to get "BlazePoser_int8". We need this calib data in here because some "padding" layers are not wrapped in quantizewrapper by "tensorflow_model_optimization" layers so the min/max is not available for them. (this is my guess)
+
+    4. I compare the raw outputs of the "BlazePoser_fp32" and "BlazePoser_int8" using an extensive dataset and I get the 'MAE' = 0.35
+
+    5. I compare the raw outputs of the "BlazePoser_fp32" and "BlazePoser_QAT_int8" using an extensive dataset and I get the 'MAE' = 0.21
+
+    Teacher Student Fine-tuning Dataset Preparation: An extensive dataset is collected to have equal number of images with big and small faces to activate the both shallow and deep heads of the model. The "BlazePoser_ft32" model which already has those clip activation in the layers is taken and only removed the "relu" from face classifiers for soft label generation. Thereafter, the model is given the dataset and the outputs as well as the output of the last layers of the two feature extractions blocks are collected and coupled with the input image. The motivations behind removing "relu" for soft labels generations is that, if we have relu the output values are so sparse and the positive ones are so small in magnitude which may lead the model to just learn Zero. So the relu is remove to also have negative values to help the loss function to learn better. 
+
+    The Challenge/Problem : So far everything makes sense because the 'MAE' is dropper after QAT fine tuning teacher student approach. however, the problem is that the model "BlazePoser_int8" has more stable and accurate prediction during inference compared to "BlazePoser_QAT_int8" although the 'MAE' is higher. We guess that the reason is behind the fact that the configured min/max for dynamc range during fine tuning process are not proper and good. 
+
+    The Failed approaches so far carried out to address the issue: 
+    -  we tried to load the only the weights and biases of the "BlazePosr_QAT_fp32" model excluding the min/max set during fine-tuning, so that we only have the fine tuned weights and give them the find out calib data to learn the dynamic range. This approach is not feasible in implementation. 
+    - we tried to load the "BlaePoser_QAT_fp32" and give it that unique calib data to update the already set min/max of the layers but this did not improve or change anything. 
+
+
+    Your Task as an assistant of the user to help him to quantize the model and reach his goals: 
+    There are three python codes attached to this message. In the code "Perform_QAT.py" the workflow of quantization Aware fine tuning Teacher assistant is developed. The rest of the code are the Utilities and helpers. Read accurately the class "ParametricClipQuantizeConfig" in the Utilities.py. Read and study the codes extensively line by line to have an accurate understanding of how the process and workflow is done in every details, like the losses used and every thing else. logic wise and implementation wise assess everything.Ask the user any further information you need before start thinking and investigating the problem. Investigate all the possible reasons behind the issue and how to address them. Make sure that any possible solution you recommend must be feasible in implementation considering tensorflow version 2.13-2.15 and tfmot version 0.8.0
+
+  ## GPT Response:
+      BlazePoser INT8 Quantization Analysis
+
+    The BlazePoser model (a BlazeFace extension for head-pose regression) has been modified for quantization-friendliness (adding ReLU to classifier heads and custom ClipActivation layers). Converting the original float32 model (BlazePoser_fp32) to an INT8 TFLite via post-training quantization (PTQ) yields a model (BlazePoser_int8) whose raw outputs differ from the float model by MAE≈0.35. A quantization-aware training (QAT) approach with a teacher–student setup yields a QAT-trained model (BlazePoser_QAT_fp32) whose eventual INT8 version (BlazePoser_QAT_int8) has a lower MAE≈0.21 (closer numerically to the float outputs).  Paradoxically, however, the PTQ model gives more stable/accurate predictions in practice than the QAT model. This suggests the QAT-trained model is not taking full advantage of quantization. We investigate possible causes and remedies below.
+
+    Potential Causes of QAT Underperformance
+      •	Dynamic‐range miscalibration:  QAT relies on fake-quantization nodes to estimate the true min/max of each activation. If those ranges are not well captured, activations may clip or saturate improperly at inference ￼.  For example, it is known that TFLite can drop the final min/max nodes of regression outputs, causing empty range errors ￼. A workaround is to append a dummy clamp (e.g. tf.minimum(nn_out, large_constant)) to force a captured range ￼. If the QAT fake-quantizers ended up with too-narrow ranges (perhaps due to limited training data or teacher labels that lacked outliers), the INT8 model may clip important values during inference, degrading real-world accuracy despite a lower numerical MAE.
+      •	Incomplete quantization coverage:  Some layers (e.g. padding or custom clipping layers) may not have been annotated for quantization. The user noted “some padding layers are not wrapped in QuantizeWrapper”, so their ranges weren’t learned during QAT. TFLite conversion then needed representative data to compute those ranges (suggesting QAT alone did not cover them). Incomplete coverage can cause unexpected scaling at runtime. It may help to explicitly annotate or fuse such layers so that all operations have quantization ranges, or to remove extraneous padding.
+      •	Teacher–student mismatch:  The teacher model used for labels had ReLU removed on the face-classifier outputs (to provide negative values), while the QAT student model presumably still uses the original ReLU (or sigmoid) at those heads. If the student’s output domain is different from the teacher’s, the loss may drive the student to suboptimal behavior. In particular, training with mean-squared-error to match a teacher that outputs small negative logits could confuse the student’s activation distributions. This misalignment might explain why the QAT model, despite a lower average error to the teacher, performs worse on actual detection/pose tasks. (It’s important that the student and teacher produce outputs on the same scale/distribution, or that training losses account for the different activation functions.)
+      •	Limited or suboptimal fine-tuning:  QAT needs careful hyperparameter tuning. If the QAT training was too short (e.g. only a few epochs) or with too high/low learning rate, the model may not have fully adapted. In one reported case, training only 1 epoch made PTQ outperform QAT ￼.  More generally, without sufficient QAT epochs, the fake-quantization “noise” is not fully learned around, and the model may underfit quantization effects ￼. Conversely, excessive noise injection can hurt convergence. The user should verify that the QAT model was trained thoroughly (e.g. many epochs, proper optimizer) so that the quantization parameters (min/max) stabilize.
+      •	Regularization effect of PTQ:  Interestingly, PTQ can sometimes improve generalization by acting as a form of regularization ￼. A simpler, quantized model may ironically avoid overfitting that the float or QAT model suffers. If the BlazePoser model is complex and tended to overfit, the noise from QAT might not help, whereas PTQ’s static quantization could inadvertently yield a “better” model on unseen data. In such cases, standard QAT might not help without addressing overfitting in other ways.
+      •	Loss formulation:  The teacher–student QAT may be training on raw regression outputs and internal features, but if losses (e.g. MSE on outputs) do not align with task metrics (e.g. classification accuracy, bounding-box IoU), the model might not optimize the right objective. Possibly adding supervised losses (e.g. cross-entropy for face detection, or regression losses for bounding boxes/landmarks) in addition to distillation losses could guide the quantized model to be accurate on the real task rather than only matching teacher values.
+
+    Diagnostic Checks
+      •	Inspect Quantize Wrappers:  Print a summary or visualize (e.g. with Netron) the QAT-annotated model to ensure every layer that should be quantized is indeed wrapped ￼. Check especially the custom Clip and padding layers. If some layers are still “float”, they may be handled incorrectly at conversion.
+      •	Monitor Min/Max Values:  During or after QAT, extract the min/max recorded by the fake-quantizers (e.g. the QuantizeWrapper objects’ MovingAverageQuantizer variables). Compare these to the actual data range seen in representative samples. If there’s a large discrepancy, it indicates poor calibration. (One could run batches of real input through the QAT model in training mode to update these statistics, or manually adjust them.)
+      •	Check Output Distributions:  Compare the output histograms of the float, PTQ, and QAT models on validation data. Look for signs of saturation (e.g. many outputs at ±127) in QAT that aren’t in PTQ. Also examine intermediate activations: if QAT activations cluster near the representable extremes, it suggests clipping.
+      •	Evaluate on Representative Data:  Use the calibration dataset itself to run inference on the QAT model and measure layer outputs. This can reveal if certain layers are hitting range limits unexpectedly.
+
+    Possible Remedies
+      •	Ensure Complete Quantization:  Annotate or fuse any stray layers. For example, if ZeroPadding2D is used, wrap it with a QuantizeConfig so its outputs get fake-quantized, or replace it by Conv2D with padding internally.  The converter’s need for a representative dataset on the QAT model suggests some ops weren’t quantized; fixing this can allow QAT’s learned ranges to be used.
+      •	Add Dummy Clamp After Outputs:  As one answer suggests for regression networks ￼, append a no-op clamp like nn_out = tf.minimum(nn_out, 1e6) (or appropriate bound) in the model before final output. This forces the converter to keep a min/max node. In the BlazePoser case, adding a small clipped ReLU or min op on the final regression outputs can ensure range info is captured.
+      •	Re-align Teacher/Student Outputs:  Consider restoring the ReLU on the teacher’s classifier outputs (so both teacher and student have the same activation range), or apply a linear scaling so that the teacher’s labels match the quantized domain the student learns. Alternatively, train the student to match a sigmoid probability of face presence (using cross-entropy) rather than raw logits. This may stabilize the distillation.
+      •	Train Longer or Tune QAT:  Increase the number of fine-tuning epochs under QAT. Monitor training losses: if they plateau quickly, try lowering the learning rate or using a learning-rate schedule. QAT often requires a smaller learning rate than standard training to converge under quantization noise. Optionally, freeze batch-norm statistics and make sure all layers are in tf.train.ModeKeys.TRAIN mode during QAT so fake-quantizers update.
+      •	Explicitly Calibrate QAT Model:  Although the QAT model was fine-tuned, one can still run a few hundred calibration steps on it (in training mode) with representative data, solely to update the fake-quantizer min/max (without changing weights). This “extra calibration phase” can improve the final range statistics.
+      •	Simplify/Adjust ParametricClip:  The custom ParametricClipQuantizeConfig may be mis-specified. Ensure it quantizes the clipping layers correctly. For example, verify that its get_output_quantizers returns appropriate quantizers for the layer’s output (if needed). If it only has weights (the clip threshold) but no activation quantization, the output may bypass quantization. As a test, one might replace the parametric clip with a fixed tf.clip_by_value to simplify.
+      •	Alternative QAT Approaches:  If the teacher-student setup continues to underperform, one could try standard QAT using the original training labels (with the float model and clip modifications) rather than distillation. Alternatively, one could first train a fully float student on soft targets, then run QAT on that student model (embedding fakequant from the start).
+      •	Drop Unnecessary Modules:  If certain layers (like those padding layers) are not absolutely needed or can be reformulated, removing them could simplify quantization. For example, using 'same' padding in convolutions (instead of explicit pad layers) might avoid the issue.
+      •	Converter Flags:  Ensure the TFLite converter is configured for full-int8 inference (e.g. converter.target_spec.supported_ops = [TFLITE_BUILTINS_INT8]). If input/output float is desired, set converter.inference_input_type = tf.float32 and converter.inference_output_type = tf.float32 after calibration, so internal scale/zero-point are computed but I/O remains float. This avoids any additional quantize/dequantize nodes on I/O.
+
+    Related Work and Precedents
+
+    There are few direct reports of PTQ clearly beating QAT, but it has been observed.  A TensorFlow discussion notes that in some cases PTQ acted like a regularizer, and QAT introduced noise if not well-tuned ￼ ￼.  (One user saw PTQ give +3% vs QAT giving -6% difference on the same model ￼.) This suggests it’s not impossible for PTQ to outperform a hastily-trained QAT model, especially if the calibration set is well-chosen and QAT training was minimal.  In terms of handling outlier ranges, StackOverflow answers emphasize capturing true min/max ranges (or adding dummy clamps) for regression outputs ￼ ￼.
+
+    No known published project specifically addresses a “clip layer” quantization mismatch, but general QAT guidelines (TensorFlow [30]) stress using allowlisted layers and appropriate quantize configs.  It may be helpful to compare with other lightweight models (e.g. MobileNet, BlazeFace) that have been successfully quantized.  For example, ensuring that DepthwiseConv2D+BatchNorm sequences are folded (TF Lite often folds batch-norm in conv) and that activations like HardSwish/ReLU6 (if any) are quantizable.
+
+    Recommendations
+      1.	Verify model modifications: Double-check that the QAT training model has the same architecture as inference (Clips/ReLUs), aside from the fake-quant wrappers. In particular, make sure any ReLU removed in the teacher is also absent in the student if using those distillation labels.
+      2.	Add range clamping ops: Insert explicit clip/minimum ops on any regression outputs and classification logits, so the converter cannot drop range info ￼.
+      3.	Fully quantize all layers: Annotate any custom or padding layers so fake-quant wrappers cover them. If necessary, replace them with standard Keras layers that are supported by tfmot.quantize_apply.
+      4.	Extend QAT training: Fine-tune the QAT model for more epochs (monitor that the loss truly decreases). Try a smaller learning rate or a learning-rate schedule to ensure stable convergence.
+      5.	Calibrate after QAT: Run the trained QAT model on the calibration dataset (in training mode) to update all min/max statistics, then export the TFLite with representative data. This hybrid approach leverages QAT learning plus final calibration.
+      6.	Evaluate metrics on a validation set: Compare actual detection/pose errors (not just raw MAE to teacher) for BlazePoser_int8 vs BlazePoser_QAT_int8. If the QAT model still lags, focus on where it fails (e.g. missing small faces, wrong pose) to guide targeted fixes (e.g. loss weighting).
+      7.	Iterate on Clip config: Review the ParametricClipQuantizeConfig implementation. Ensure it returns correct quantizers and sets the layer’s parameters appropriately. If in doubt, try a simpler fixed-range quantizer for those layers to see if it improves.
+
+    By carefully auditing the quantization workflow (particularly the dynamic-range calibration) and ensuring the QAT model and its teacher are aligned, one should be able to close the gap. The goal is that the INT8 model, whether obtained via PTQ or QAT, behaves as reliably as the float model. The recommendations above are all implementable with TensorFlow 2.13–2.15 and TFMOT 0.8.0.
+
+    Sources:  Known issues with min/max ranges in full-int8 conversion ￼ ￼; observed cases of PTQ > QAT performance due to regularization or hyperparameters ￼ ￼; TensorFlow QAT best practices.
+
+
+  # My insights findings: 
+      1. You’re asking what it means that “TFLite’s Softmax has fixed quantization parameters.” This means that, unlike most quantized operations whose scale and zero-point are dynamically determined (based on data range), the Softmax operator in TFLite must use specific, fixed values:
+      •	Scale must be 1/256
+      •	Zero point must be −128
+
+    These values are mandated by the TFLite specification and CMSIS‑NN compatibility to allow bit‑exact inference. The converter doesn’t choose these values—they’re hard‑coded requirements for the Softmax operator. ￼ ￼
+
+    ⸻
+
+    Why this matters
+
+    Because the Softmax operator must use these fixed quantization parameters, placing a fake-quantizer after Softmax during QAT (with adjustable min/max) doesn’t align with TFLite’s constraints. In short, there’s no wiggle room—the scale and zero-point for Softmax must always be (1/256, −128), so the QAT wrapping logic avoids adding a generic output fake-quant there.
+
+    ⸻
+
+    If you need post-Softmax quantization during QAT, the supported way is to separate it and use a custom QuantizeConfig. But note that TFLite conversion will enforce the fixed parameters at conversion time anyway.
+
+    2. when the outputs of a layer are quantized with symmetric parameter, the qat wrapper observes the true min/max which may not have same magnitude but the file tflite result for that output is symmetrically quantized>> zero-point is zero. 
+
+# QAT Experiments insights :
+  ## Experiment 5: 
+    - Small Faces: Very Good
+      - Pose Regressors : Very Good
+      - facial landmark detection: Good
+    - Big Faces: No detect
+    - Jitter: Very Good 
+  ## Experiment 6:
+    - Same as Experiment 5
+  ## Experiment 7:
+    - Same as Experiment 5
+  ## Experiment 9:
+    - Same as Experiment 5
+  ## Experiment 10:
+    - Small Faces: Very good
+      - Pose Regressor: Not Good
+      - facial landmark: Good
+      - Jitter: Good
+    Big Faces: Very Good
+      - Pose Regressor: Not Good
+      - Facial Landmark: Not Good
+      - Jitter: Not Good 
+  ## Experiment 11: 
+    - Same as Experiment 10 but jitter for big faces is improved.
+  ## Experiment 12: 
+    - Same as Experiment 10
+  
+  # General Instights:
+    1. The Roll is most of the times not working well, for positive values it works, for negataive it doesnt.
+    2. the models detection score is not too confident. 
+
+# Teacher Student Quantization Aware Finetuning Head1 SubGraph: 
+  ## WorkFlow : 
+
+  1. Take the best FakeQuant Wrapped model that already all the dynamic ranges are calibrated separately(each subgraph) and also the back-bone is fine tuned.
+  2. Take a dataset of images so that all images in the dataset are having necessarily all faces detected by the shallow head of the BlazePoser.
+  3. Perform the teacher student quantization aware fine tuning on only the Head1 submodel with our customized knowledge distillation loss function.
+
+  ## Key parameters
+  1. ***freeze_observers*** : This parameters tells if the already calibrated dynamic ranges of the model during the split warm up should be freezed during fine tuning or they can be changed during training. The thing i can observe is that if the dynamic ranges are fixed, the model takes longer to converge. As far as I can see freezing the dynamic range is not beneficial. If the observers are not freezing model just goes one epoch.
+
+
+  2. ***cross_batch_normalization*** : this parameters handles the reduce on our custom loss function during training, it contributes if we want to mask positive anchors ( with negatives for face CLS). If we have it true, during loss function calculation the final scalar of the loss is calculated by averaging on the whole batch ragardless of considering each data sample while if it is false we fist normalize the loss for each sample so for each sample we have a scalar final loss number then we mean reduce over the all samples in the batch. when it is true a little bit just the results are better but not sth important.
+  3. ***regression_loss*** : "Huber" or "MSE" ? it is not important apparently too much but around 0.01 pixle the landmark mae is improved when using huber which is negligible.Even the huber delta does not matter. but we stick to huber. 
+
+  4. ***pose_tempreture***: the value 1 very slightly performed best.
+
+  5. ***w_reg***: I set different values of it while keeping other weights zero, not a big change. a very negligible improve only.
+
+  6. ***Positive_masking***: having it true is a bit slightly better.some times it is improved a lot when have it true.
+  
+  
+  ```diff
+  + !!Important: Generally, if the observers of the dynamic range are not freezed during training the training is stopped after one epoch (i.e. after one epoch the losses monotically increasing), and also since the learning rate is too small (1e-5) therefore there is not a remarkable difference between each experiment when we want to assess the effect of a parameter. 
+
+  - When the weight of a loss is not zero but the others are zero, only the parameters related to that loss are updated during training. Furthermore, I have experimented to improve just a single task lets say BB+facial landmark regression or Pitch estimation by only having the related weight in the loss non-zero while setting the other weights to zero, I have obeserved that it helps the model to learn that task a bit slightly (in order of 0.01 or less) better which is not considerable for us.
+  
+  ```
+# Teacher Student Quantization Aware Finetuning Head2 SubGraph: 
+
+  ## Experiments: 
+    1. "eval_20250920_092754" best deep head angles
+    2. "eval_20250920_095003" a bit worse deep angles but much better shallow angels
+    3. "eval_20250920_101702" worsen deep angles, better shallow angles 
+    4. "eval_20250920_103044" the best balance between deep and shallow angles (best avg angles mae)
+    5. "eval_20250920_104636" i set the maske with positive and cross batch normalization to false, the model degraded so much for both heads. 
+    6. "eval_20250920_105421" i set the freeze_observers to false and the model degraded significantly for both heads.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# THesis 
+
+1. put qualitative results in introduction of the thesis, that compares my solution with other works limitations.
+2. say the last attempt for the problem, we do not say a diary of the failed approaches. at some points we can say why the final approach was better that the failed one. 
+3. comment the lines of algorithm in the text. 
+4. in experimental say the failour cases. 
+5. use S calpital in latex for sytanx
+6. use active ( we did ..., our method ....)
+7. say important things at the beginning not late.
+8. we don ont say the failed approaches. just the final solution and why we use those components in the final solution. 
+9. illustration in exe summary 
+10. in conclusion tell future works
+11. in introducition we say why it is challenging 
+then connect between challenges and contributions 
+use own notation to describe other works
+
+
+
 
 
